@@ -1,0 +1,23 @@
+services:
+  scene-script:
+    image: scene-script:1.3
+    build: .
+    container_name: scene-script
+    restart: unless-stopped
+
+    environment:
+      PUID: 1000
+      PGID: 1000
+
+      # Séparés par des virgules
+      TRACKERS: >
+        https://tracker1/announce,
+        https://tracker2/announce
+
+      # Optionnel : clé api TMDb
+      # TMDB_API_KEY: votre_cle_api_tmdb_ici
+
+    volumes:
+      - /mnt/user/data/films:/data/films
+      - /mnt/user/data/test:/data/torrent
+      - /mnt/user/data/test/cache_tmdb:/data/cache_tmdb
