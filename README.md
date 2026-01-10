@@ -99,4 +99,13 @@ services:
       - /mnt/user/data/torrent:/data/torrent
       - /mnt/user/data/cache_tmdb:/data/cache_tmdb
 ```
+## 📝 Notes
 
+Les séries sont traitées exactement comme les films
+(pas de gestion saison/épisode spécifique).
+
+Un fichier vidéo = un torrent.
+
+Les fichiers déjà traités ne sont jamais régénérés.
+
+Compatible Unraid, NAS, VPS, Raspberry Pi.
