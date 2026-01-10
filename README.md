@@ -73,7 +73,7 @@ Il surveille un ou plusieurs dossiers de vidéos, analyse les noms de fichiers, 
         ├── Nom.Serie.nfo
         └── Nom.Serie.txt
 ```
-##🚀 Exemple docker-compose
+## 🚀 Exemple docker-compose
 
 ```yaml
 version: "3.8"
