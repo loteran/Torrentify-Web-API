@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="magnetGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#dc2626;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="url(#magnetGradient)"/>
+  <!-- Magnet icon -->
+  <g fill="white" transform="translate(20, 18) scale(0.6)">
+    <!-- Left pole -->
+    <rect x="10" y="10" width="25" height="20" rx="3"/>
+    <rect x="10" y="30" width="25" height="55" rx="3"/>
+    <!-- Right pole -->
+    <rect x="65" y="10" width="25" height="20" rx="3"/>
+    <rect x="65" y="30" width="25" height="55" rx="3"/>
+    <!-- Bottom arc (horseshoe) -->
+    <path d="M10,85 L10,70 Q10,100 50,100 Q90,100 90,70 L90,85 Q90,90 50,90 Q10,90 10,85 Z"/>
+    <!-- Red stripes on poles -->
+    <rect x="10" y="10" width="25" height="20" rx="3" fill="#ef4444"/>
+    <rect x="65" y="10" width="25" height="20" rx="3" fill="#3b82f6"/>
+  </g>
+</svg>

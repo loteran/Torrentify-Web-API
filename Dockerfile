@@ -1,3 +1,21 @@
+# ========================================
+# Stage 1: Build Frontend
+# ========================================
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /build
+
+# Copy frontend package files
+COPY frontend/package*.json ./
+RUN npm ci
+
+# Copy frontend source and build
+COPY frontend/ ./
+RUN npm run build
+
+# ========================================
+# Stage 2: Production
+# ========================================
 FROM node:20-alpine
 
 # ----------------------
@@ -11,7 +29,6 @@ RUN apk add --no-cache \
     bash \
     git \
     build-base \
-    inotify-tools \
     curl \
     jq
 
@@ -25,24 +42,42 @@ RUN python3 -m venv /opt/venv \
 ENV PATH="/opt/venv/bin:$PATH"
 
 # ----------------------
-# Node.js dependencies
+# Backend Node.js dependencies
 # ----------------------
 WORKDIR /app
-COPY package.json package-lock.json* ./
+COPY package*.json ./
 RUN npm install --omit=dev
 
 # ----------------------
-# Scripts
+# Copy backend code
 # ----------------------
-COPY . .
-RUN chmod +x *.js *.sh
+COPY backend/ ./backend/
+COPY scene-maker.js ./
+COPY docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh scene-maker.js
 
 # ----------------------
-# Volumes
+# Copy frontend build from stage 1
 # ----------------------
-VOLUME ["/data/films", "/data/torrent", "/data/cache_tmdb"]
+COPY --from=frontend-builder /build/dist ./frontend/dist
+
+# ----------------------
+# Environment variables
+# ----------------------
+ENV WEB_PORT=3000
+ENV NODE_ENV=production
+
+# ----------------------
+# Data directory (config only, media volumes configured by user)
+# ----------------------
+RUN mkdir -p /data/config
+
+# ----------------------
+# Expose web port
+# ----------------------
+EXPOSE 3000
 
 # ----------------------
 # Lancement
 # ----------------------
-CMD ["sh", "/app/watch.sh"]
+CMD ["node", "backend/server.js"]

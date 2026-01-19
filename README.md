@@ -1,111 +1,135 @@
-# 🧲 Torrentify
+# Torrentify-Web-API
 
-**Torrentify** est un conteneur Docker qui génère automatiquement des fichiers  
-**.torrent**, **.nfo** et des métadonnées **TMDb** à partir de **films et de séries**.
+Generateur automatique de fichiers .torrent avec interface web et configuration via explorateur de fichiers.
 
-Il surveille un ou plusieurs dossiers de vidéos, analyse les noms de fichiers, récupère les informations depuis TMDb et prépare des fichiers propres et prêts à l’usage pour les **trackers privés** et les serveurs **Unraid / NAS**.
+> **Fork de** : [thimble9057/torrentify](https://github.com/thimble9057/torrentify)
+>
+> Ce projet est base sur le travail original de thimble9057. Merci pour le code source initial.
 
----
+## Fonctionnalites
 
-## ✨ Fonctionnalités
+- Interface web moderne et reactive
+- **Configuration des repertoires via explorateur de fichiers integre**
+- Scan automatique des bibliotheques de medias
+- Recuperation des metadonnees depuis TMDb (The Movie Database)
+- Generation de fichiers .torrent avec vos trackers
+- Support des films, series, animes et jeux
+- Affichage hierarchique pour les jeux (ROMs, emulateurs)
+- Creation de hardlinks pour le seeding
+- Configuration complete via interface web
 
-- 🎬 Génération automatique de fichiers `.torrent`
-- 📝 Création de fichiers `.nfo` propres (sans chemin complet)
-- 📄 Fichier `.txt` avec ID TMDb ou message explicite si non trouvé
-- 👀 Surveillance en temps réel des dossiers **films et/ou séries**
-- 🔄 Scan initial automatique au démarrage du conteneur
-- 🔍 Scan récursif des sous-dossiers
-- 🧠 Analyse intelligente des noms de fichiers (GuessIt)
-- 🎞️ Recherche TMDb avec cache local
-- 🧲 Trackers configurables via variables d’environnement
-- ⚙️ Activation indépendante des **films** et des **séries**
-- 📁 Sortie séparée pour les films et les séries
-- 🔐 Compatible Unraid (`PUID` / `PGID`)
-- 🐳 Image Docker légère basée sur Alpine
-- 🧱 Compatible multi-architecture (`amd64` / `arm64`)
+## Installation rapide
 
----
+### 1. Cloner le projet
 
-## ⚙️ Variables d’environnement
-
-| Variable | Description |
-|--------|------------|
-| `TMDB_API_KEY` | Clé API TMDb |
-| `TRACKERS` | URL des trackers séparées par des virgules |
-| `ENABLE_FILMS` | Active le traitement et la surveillance des films (`true` / `false`) |
-| `ENABLE_SERIES` | Active le traitement et la surveillance des séries (`true` / `false`) |
-| `PARALLEL_JOBS` | Nombre de fichiers traités en parallèle (défaut : 1) |
-| `PUID` | UID utilisateur (Unraid) |
-| `PGID` | GID utilisateur (Unraid) |
-
-> ⚠️ Au moins un des deux (`ENABLE_FILMS` ou `ENABLE_SERIES`) doit être activé.
-
----
-
-## 📁 Volumes
-
-### Entrée
-| Chemin | Description |
-|------|------------|
-| `/data/films` | Dossier des films (optionnel) |
-| `/data/series` | Dossier des séries (optionnel) |
-
-### Sortie
-| Chemin | Description |
-|------|------------|
-| `/data/torrent` | Fichiers générés (films et séries séparés) |
-| `/data/cache_tmdb` | Cache local TMDb |
-
----
-
-## 📂 Structure générée
-
-```text
-/data/torrent/
-├── films/
-│   └── Nom.Film/
-│       ├── Nom.Film.torrent
-│       ├── Nom.Film.nfo
-│       └── Nom.Film.txt
-└── series/
-    └── Nom.Serie/
-        ├── Nom.Serie.torrent
-        ├── Nom.Serie.nfo
-        └── Nom.Serie.txt
+```bash
+git clone https://github.com/loteran/Torrentify-Web-API.git
+cd Torrentify-Web-API
 ```
-## 🚀 Exemple docker-compose
+
+### 2. Configurer les volumes (optionnel)
+
+Editez `docker-compose.yml` si vous voulez pre-configurer les volumes.
+Sinon, vous pouvez tout configurer via l'interface web.
 
 ```yaml
-version: "3.8"
+volumes:
+  # Configuration (obligatoire)
+  - ./config:/data/config
 
-services:
-  torrentify:
-    image: thimble9057/torrentify:latest
-    container_name: torrentify
-    restart: unless-stopped
-
-    environment:
-      PUID: 1000
-      PGID: 1000
-      TMDB_API_KEY: votre_cle_tmdb
-      TRACKERS: https://tracker1/announce,https://tracker2/announce
-      ENABLE_FILMS: "true"
-      ENABLE_SERIES: "false"
-      PARALLEL_JOBS: 1
-
-    volumes:
-      - /mnt/user/data/films:/data/films
-      - /mnt/user/data/series:/data/series
-      - /mnt/user/data/torrent:/data/torrent
-      - /mnt/user/data/cache_tmdb:/data/cache_tmdb
+  # Montez la racine de votre systeme pour l'explorateur
+  - /:/host:ro
 ```
-## 📝 Notes
 
-Les séries sont traitées exactement comme les films
-(pas de gestion saison/épisode spécifique).
+### 3. Demarrer
 
-Un fichier vidéo = un torrent.
+```bash
+docker compose up -d
+```
 
-Les fichiers déjà traités ne sont jamais régénérés.
+### 4. Configurer via l'interface
 
-Compatible Unraid, NAS, VPS, Raspberry Pi.
+Ouvrez `http://localhost:3001` dans votre navigateur.
+
+Lors de la premiere utilisation, configurez :
+- Votre cle API TMDb (gratuite sur themoviedb.org)
+- Vos URLs de trackers avec passkey
+- **Vos repertoires de medias via l'explorateur de fichiers integre**
+
+## Configuration
+
+### Variables d'environnement
+
+Toutes les variables peuvent etre definies dans `.env` ou via l'interface web.
+
+| Variable | Description | Defaut |
+|----------|-------------|--------|
+| `TMDB_API_KEY` | Cle API TMDb | (via interface) |
+| `TRACKERS` | URLs des trackers (virgules) | (via interface) |
+| `ENABLE_FILMS` | Activer les films | `true` |
+| `ENABLE_SERIES` | Activer les series | `true` |
+| `ENABLE_ANIMES_FILMS` | Activer les animes films | `true` |
+| `ENABLE_ANIMES_SERIES` | Activer les animes series | `true` |
+| `ENABLE_JEUX` | Activer les jeux | `true` |
+| `PARALLEL_JOBS` | Traitements paralleles | `1` |
+| `WEB_PORT` | Port de l'interface | `3000` |
+
+### Obtenir une cle API TMDb
+
+1. Creez un compte sur [themoviedb.org](https://www.themoviedb.org/)
+2. Allez dans Parametres > API
+3. Demandez une cle API (gratuit)
+4. Copiez la cle API (v3 auth)
+
+## Docker Hub
+
+```bash
+docker pull loteran/torrentify-web-api:latest
+```
+
+## Volumes Docker
+
+| Chemin conteneur | Description |
+|------------------|-------------|
+| `/data/config` | Configuration persistante |
+| `/data/films` | Bibliotheque de films |
+| `/data/series` | Bibliotheque de series |
+| `/data/Animes_films` | Films d'anime |
+| `/data/Animes_series` | Series d'anime |
+| `/data/jeux` | Jeux / ROMs |
+| `/data/torrent` | Sortie des fichiers .torrent |
+| `/data/hardlinks` | Hardlinks pour seeding |
+| `/host` | Acces au systeme hote (lecture seule) |
+
+## Utilisation
+
+1. Ouvrez l'interface web
+2. Cliquez sur l'icone **Parametres** pour configurer vos repertoires
+3. Utilisez le bouton **Parcourir** pour selectionner vos dossiers
+4. Selectionnez les fichiers/dossiers a traiter
+5. Cliquez sur "Traiter la selection"
+6. Recuperez vos fichiers .torrent dans le dossier de sortie
+
+## Reverse Proxy
+
+Pour utiliser derriere un reverse proxy avec un sous-chemin :
+
+```
+BASE_PATH=/torrentify
+```
+
+## Build depuis les sources
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+## Credits
+
+- Code original : [thimble9057/torrentify](https://github.com/thimble9057/torrentify)
+- Metadonnees : [The Movie Database (TMDb)](https://www.themoviedb.org/)
+
+## Licence
+
+MIT

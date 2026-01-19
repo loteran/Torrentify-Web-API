@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment & Configuration (SENSITIVE DATA)
+.env
+.env.local
+.env.*.local
+config/
+*.json.backup
+
+# Build outputs
+frontend/dist/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Debug
+npm-debug.log*
+
+# Claude
+.claude/
+
+# Test
+coverage/
+.nyc_output/
