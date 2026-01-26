@@ -71,7 +71,11 @@ function ConfigPanel({ onClose, onSave, isSetup = false }) {
     enable_animes_films: true,
     enable_animes_series: true,
     enable_jeux: true,
-    parallel_jobs: 1
+    parallel_jobs: 1,
+    // Authentification
+    auth_enabled: false,
+    auth_username: '',
+    auth_password: ''
   });
   const [directories, setDirectories] = useState({});
   const [loading, setLoading] = useState(true);
@@ -108,7 +112,11 @@ function ConfigPanel({ onClose, onSave, isSetup = false }) {
         enable_animes_films: data.enable_animes_films ?? true,
         enable_animes_series: data.enable_animes_series ?? true,
         enable_jeux: data.enable_jeux ?? true,
-        parallel_jobs: data.parallel_jobs || 1
+        parallel_jobs: data.parallel_jobs || 1,
+        // Authentification
+        auth_enabled: data.auth_enabled ?? false,
+        auth_username: data.auth_username || '',
+        auth_password: '' // Ne pas afficher le mot de passe existant
       });
     } catch (err) {
       setError('Erreur chargement configuration');
@@ -401,6 +409,48 @@ function ConfigPanel({ onClose, onSave, isSetup = false }) {
               onBrowse={() => openBrowser('path_hardlinks', 'add')}
             />
             <small className="field-hint">Pour le seeding avec Transmission/qBittorrent</small>
+          </div>
+
+          {/* Authentification */}
+          <div className="config-section">
+            <h3>Authentification</h3>
+            <small className="section-hint">Protegez l'acces a l'interface avec un identifiant et mot de passe.</small>
+
+            <div className="config-field">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={config.auth_enabled}
+                  onChange={(e) => handleChange('auth_enabled', e.target.checked)}
+                />
+                Activer l'authentification
+              </label>
+            </div>
+
+            {config.auth_enabled && (
+              <>
+                <div className="config-field">
+                  <label>Identifiant</label>
+                  <input
+                    type="text"
+                    value={config.auth_username}
+                    onChange={(e) => handleChange('auth_username', e.target.value)}
+                    placeholder="admin"
+                  />
+                </div>
+
+                <div className="config-field">
+                  <label>Mot de passe</label>
+                  <input
+                    type="password"
+                    value={config.auth_password}
+                    onChange={(e) => handleChange('auth_password', e.target.value)}
+                    placeholder="Laisser vide pour ne pas modifier"
+                  />
+                  <small>Laissez vide pour conserver le mot de passe actuel</small>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Options avancees */}

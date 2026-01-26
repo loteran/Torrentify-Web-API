@@ -1,4 +1,5 @@
 const sceneMaker = require('../../scene-maker');
+const configManager = require('./configManager');
 
 class FileScanner {
   constructor() {
@@ -20,8 +21,11 @@ class FileScanner {
     }
 
     try {
-      // Scan files using scene-maker's getVideoFiles function
-      const files = await sceneMaker.getVideoFiles();
+      // Get dynamic media configuration from configManager
+      const mediaConfig = configManager.getMediaConfig();
+
+      // Scan files using scene-maker's getVideoFiles function with dynamic config
+      const files = await sceneMaker.getVideoFiles(mediaConfig);
 
       // Calculate statistics
       const stats = this.calculateStats(files);

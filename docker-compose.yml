@@ -9,33 +9,8 @@ services:
     ports:
       - "3001:3000"
 
-    environment:
-      # Permissions (Unraid / Linux)
-      PUID: 1000
-      PGID: 1000
-
-      # Activation des medias
-      ENABLE_FILMS: "true"
-      ENABLE_SERIES: "true"
-      ENABLE_JEUX: "true"
-
-      # TMDb - Obtenez votre cle sur https://www.themoviedb.org/settings/api
-      TMDB_API_KEY: ""
-
-      # Trackers (separes par virgules)
-      # Exemple: https://tracker.example.com/announce?passkey=votre_passkey
-      TRACKERS: ""
-
-      # Optionnel
-      PARALLEL_JOBS: 1
-
-      # Hardlinks pour Transmission (seeding)
-      # Format: source_prefix:hardlink_dir,source_prefix2:hardlink_dir2
-      HARDLINK_MAPPING: ""
-
-      # Web Interface
-      WEB_PORT: 3000
-      BASE_PATH: ""
+    env_file:
+      - .env
 
     volumes:
       # Configuration persistante

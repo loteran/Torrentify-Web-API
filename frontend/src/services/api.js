@@ -8,33 +8,47 @@ const api = axios.create({
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  withCredentials: true
 });
 
-// Request interceptor for logging (development)
-if (import.meta.env.DEV) {
-  api.interceptors.request.use(
-    (config) => {
+// Request interceptor pour ajouter le token d'authentification
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    if (import.meta.env.DEV) {
       console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
-      return config;
-    },
-    (error) => {
-      console.error('API Request Error:', error);
-      return Promise.reject(error);
     }
-  );
+    return config;
+  },
+  (error) => {
+    console.error('API Request Error:', error);
+    return Promise.reject(error);
+  }
+);
 
-  api.interceptors.response.use(
-    (response) => {
+// Response interceptor pour gerer les erreurs d'authentification
+api.interceptors.response.use(
+  (response) => {
+    if (import.meta.env.DEV) {
       console.log(`API Response: ${response.status} ${response.config.url}`);
-      return response;
-    },
-    (error) => {
-      console.error('API Response Error:', error);
-      return Promise.reject(error);
     }
-  );
-}
+    return response;
+  },
+  (error) => {
+    if (import.meta.env.DEV) {
+      console.error('API Response Error:', error);
+    }
+    // Si 401 et pas sur la route auth, declencher un evenement
+    if (error.response?.status === 401 && !error.config.url.includes('/auth/')) {
+      window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+    }
+    return Promise.reject(error);
+  }
+);
 
 export const apiService = {
   // Health check
@@ -99,7 +113,20 @@ export const apiService = {
     api.get('/config/browse', { params: { path } }),
 
   getRoots: () =>
-    api.get('/config/roots')
+    api.get('/config/roots'),
+
+  // Authentification
+  getAuthStatus: () =>
+    api.get('/auth/status'),
+
+  login: (username, password) =>
+    api.post('/auth/login', { username, password }),
+
+  logout: () =>
+    api.post('/auth/logout'),
+
+  checkAuth: () =>
+    api.get('/auth/check')
 };
 
 export default apiService;

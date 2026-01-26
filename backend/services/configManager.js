@@ -5,6 +5,8 @@ const axios = require('axios');
 // Configuration file path
 const CONFIG_PATH = process.env.CONFIG_PATH || '/data/config/settings.json';
 
+const crypto = require('crypto');
+
 // Default configuration
 const DEFAULT_CONFIG = {
   tmdb_api_key: '',
@@ -21,7 +23,12 @@ const DEFAULT_CONFIG = {
   enable_animes_films: true,
   enable_animes_series: true,
   enable_jeux: true,
-  parallel_jobs: 1
+  parallel_jobs: 1,
+  // Authentification
+  auth_enabled: false,
+  auth_username: 'admin',
+  auth_password_hash: '', // Hash du mot de passe
+  auth_password: '' // Mot de passe en clair (temporaire, pour update)
 };
 
 class ConfigManager {
@@ -84,6 +91,13 @@ class ConfigManager {
       }
     }
 
+    // Ne jamais exposer le hash du mot de passe
+    delete config.auth_password_hash;
+
+    // Indiquer si un mot de passe est configuré
+    config.auth_has_password = !!(this.config.auth_password_hash ||
+      (process.env.AUTH_PASSWORD && process.env.AUTH_PASSWORD.trim() !== ''));
+
     return config;
   }
 
@@ -112,8 +126,17 @@ class ConfigManager {
         if (key === 'tmdb_api_key' && newConfig[key].startsWith('***')) {
           continue;
         }
+        // Ignorer auth_password (on utilise auth_password_hash)
+        if (key === 'auth_password') {
+          continue;
+        }
         updatedConfig[key] = newConfig[key];
       }
+    }
+
+    // Gérer le mot de passe d'authentification séparément
+    if (newConfig.auth_password && newConfig.auth_password.trim() !== '') {
+      updatedConfig.auth_password_hash = this.hashPassword(newConfig.auth_password);
     }
 
     // Ensure config directory exists
@@ -270,6 +293,74 @@ class ConfigManager {
   reloadConfig() {
     this.configLoaded = false;
     return this.loadConfig();
+  }
+
+  /**
+   * Hash un mot de passe
+   */
+  hashPassword(password) {
+    return crypto.createHash('sha256').update(password).digest('hex');
+  }
+
+  /**
+   * Vérifie un mot de passe
+   */
+  verifyPassword(password, hash) {
+    return this.hashPassword(password) === hash;
+  }
+
+  /**
+   * Get auth configuration
+   */
+  getAuthConfig() {
+    // Lire directement depuis this.config pour avoir le hash
+    if (!this.configLoaded) {
+      this.loadConfig();
+    }
+
+    // Priorité: config file > env vars
+    const authEnabled = this.config.auth_enabled ?? (process.env.AUTH_ENABLED === 'true');
+    const authUsername = this.config.auth_username || process.env.AUTH_USERNAME || 'admin';
+
+    // Pour le mot de passe, utiliser le hash stocké ou hasher le mot de passe env
+    let authPasswordHash = this.config.auth_password_hash;
+    if (!authPasswordHash && process.env.AUTH_PASSWORD) {
+      authPasswordHash = this.hashPassword(process.env.AUTH_PASSWORD);
+    }
+
+    return {
+      enabled: authEnabled,
+      username: authUsername,
+      passwordHash: authPasswordHash
+    };
+  }
+
+  /**
+   * Update auth configuration
+   */
+  updateAuthConfig(authEnabled, username, password) {
+    if (!this.configLoaded) {
+      this.loadConfig();
+    }
+
+    this.config.auth_enabled = authEnabled;
+
+    if (username) {
+      this.config.auth_username = username;
+    }
+
+    if (password) {
+      this.config.auth_password_hash = this.hashPassword(password);
+    }
+
+    // Save to file
+    const configDir = path.dirname(CONFIG_PATH);
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(this.config, null, 2), 'utf8');
+
+    return this.getAuthConfig();
   }
 }
 

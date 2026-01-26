@@ -5,6 +5,7 @@ import FileList from './components/FileList';
 import ProcessingView from './components/ProcessingView';
 import StatsPanel from './components/StatsPanel';
 import ConfigPanel from './components/ConfigPanel';
+import LoginPage from './components/LoginPage';
 import apiService from './services/api';
 import './styles/App.css';
 
@@ -16,13 +17,42 @@ function App() {
   const [isConfigured, setIsConfigured] = useState(null); // null = loading
   const [needsSetup, setNeedsSetup] = useState(false);
 
+  // Etat d'authentification
+  const [authStatus, setAuthStatus] = useState({ loading: true, enabled: false, authenticated: false });
+
   const { connected, lastMessage, subscribe, unsubscribe } = useWebSocket();
   const { files, stats, loading, error, refresh } = useFileList(activeTab);
 
-  // Verifier la configuration au demarrage
+  // Verifier l'authentification au demarrage
   useEffect(() => {
-    checkConfiguration();
+    checkAuthStatus();
+
+    // Ecouter les evenements d'auth
+    const handleUnauthorized = () => {
+      setAuthStatus(prev => ({ ...prev, authenticated: false }));
+      localStorage.removeItem('auth_token');
+    };
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
   }, []);
+
+  const checkAuthStatus = async () => {
+    try {
+      const response = await apiService.getAuthStatus();
+      const { enabled, authenticated } = response.data;
+      setAuthStatus({ loading: false, enabled, authenticated });
+
+      // Si authentifie ou auth desactivee, verifier la config
+      if (authenticated || !enabled) {
+        checkConfiguration();
+      }
+    } catch (err) {
+      console.error('Erreur verification auth:', err);
+      setAuthStatus({ loading: false, enabled: false, authenticated: true });
+      checkConfiguration();
+    }
+  };
 
   const checkConfiguration = async () => {
     try {
@@ -35,6 +65,21 @@ function App() {
       setIsConfigured(false);
       setNeedsSetup(true);
     }
+  };
+
+  const handleLogin = () => {
+    setAuthStatus(prev => ({ ...prev, authenticated: true }));
+    checkConfiguration();
+  };
+
+  const handleLogout = async () => {
+    try {
+      await apiService.logout();
+    } catch (err) {
+      console.error('Erreur logout:', err);
+    }
+    localStorage.removeItem('auth_token');
+    setAuthStatus(prev => ({ ...prev, authenticated: false }));
   };
 
   // Handle WebSocket messages
@@ -95,7 +140,24 @@ function App() {
     refresh();
   };
 
-  // Ecran de chargement
+  // Ecran de chargement (seulement si on vérifie l'auth)
+  if (authStatus.loading) {
+    return (
+      <div className="app">
+        <div className="app-loading">
+          <div className="spinner"></div>
+          <p>Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Page de login si auth activee et non authentifie
+  if (authStatus.enabled && !authStatus.authenticated) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
+  // Ecran de chargement pour la config (après vérification auth)
   if (isConfigured === null) {
     return (
       <div className="app">
@@ -113,6 +175,11 @@ function App() {
       <div className="app">
         <header className="app-header">
           <h1>🧲 Torrentify</h1>
+          {authStatus.enabled && (
+            <button className="btn btn-secondary" onClick={handleLogout}>
+              Deconnexion
+            </button>
+          )}
         </header>
         <ConfigPanel isSetup={true} onSave={handleConfigSave} />
       </div>
@@ -140,6 +207,15 @@ function App() {
           >
             📊 Stats
           </button>
+          {authStatus.enabled && (
+            <button
+              className="btn btn-secondary"
+              onClick={handleLogout}
+              title="Deconnexion"
+            >
+              Logout
+            </button>
+          )}
         </div>
       </header>
 
@@ -234,7 +310,7 @@ function App() {
 
       <footer className="app-footer">
         <p>
-          Torrentify v2.0.0 - Generateur automatique de torrents
+          Torrentify v2.1.0 - Generateur automatique de torrents
           {stats && ` • ${stats.totalFiles} fichiers • ${stats.completed} traites`}
         </p>
       </footer>

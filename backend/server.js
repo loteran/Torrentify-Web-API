@@ -3,13 +3,19 @@
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const logger = require('./utils/logger');
 const apiRoutes = require('./routes/api');
 const downloadRoutes = require('./routes/download');
 const configRoutes = require('./routes/config');
+const authRoutes = require('./routes/auth');
 const { initWebSocket, getWebSocketServer } = require('./services/websocket');
 const configManager = require('./services/configManager');
 const torrentProcessor = require('./services/torrentProcessor');
+const authManager = require('./services/authManager');
+
+// Injecter configManager dans authManager pour éviter dépendance circulaire
+authManager.setConfigManager(configManager);
 
 // Configuration
 const PORT = process.env.WEB_PORT || 3000;
@@ -20,7 +26,11 @@ const NODE_ENV = process.env.NODE_ENV || 'production';
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -31,6 +41,12 @@ if (NODE_ENV === 'development') {
     next();
   });
 }
+
+// Auth routes (avant le middleware d'auth)
+app.use(`${BASE_PATH}/api/auth`, authRoutes);
+
+// Middleware d'authentification
+app.use(authManager.middleware());
 
 // API routes
 app.use(`${BASE_PATH}/api`, apiRoutes);
@@ -82,6 +98,7 @@ const server = app.listen(PORT, () => {
   logger.info(`   ENABLE_SERIES: ${config.enable_series}`);
   logger.info(`   ENABLE_JEUX: ${config.enable_jeux}`);
   logger.info(`   PARALLEL_JOBS: ${config.parallel_jobs}`);
+  logger.info(`   AUTH: ${authManager.isEnabled() ? '✓ activée' : '✗ désactivée'}`);
 
   if (!config.configured) {
     logger.warn(`\n⚠️  Configuration incomplete! Ouvrez l'interface web pour configurer.`);
@@ -138,7 +155,7 @@ console.log(`
 ╔═══════════════════════════════════════╗
 ║                                       ║
 ║     🎬  Torrentify Web Interface      ║
-║         Version 2.0.0                 ║
+║         Version 2.1.0                 ║
 ║                                       ║
 ╚═══════════════════════════════════════╝
 `);
