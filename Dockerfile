@@ -2,12 +2,16 @@
 # Stage 1: Build Frontend
 # ========================================
 FROM node:20-alpine AS frontend-builder
-
 WORKDIR /build
+
+# Install build dependencies for native modules
+RUN apk add --no-cache python3 make g++
 
 # Copy frontend package files
 COPY frontend/package*.json ./
-RUN npm ci
+
+# Use npm install instead of npm ci for better multi-arch compatibility
+RUN npm install --legacy-peer-deps
 
 # Copy frontend source and build
 COPY frontend/ ./
@@ -46,7 +50,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 # ----------------------
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm install --omit=dev --legacy-peer-deps
 
 # ----------------------
 # Copy backend code
