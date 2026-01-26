@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import apiService from '../services/api';
 import FolderBrowser from './FolderBrowser';
+import NginxGenerator from './NginxGenerator';
 
 // Composant pour gerer plusieurs repertoires
 function MultiPathInput({ label, paths, onChange, onBrowse }) {
@@ -469,6 +470,15 @@ function ConfigPanel({ onClose, onSave, isSetup = false }) {
               <small>Nombre de fichiers traites simultanement</small>
             </div>
           </div>
+
+          {/* Reverse Proxy Nginx */}
+          {!isSetup && (
+            <div className="config-section">
+              <h3>Reverse Proxy (Nginx)</h3>
+              <small className="section-hint">Generez une configuration nginx pour acceder a Torrentify en HTTPS.</small>
+              <NginxGenerator />
+            </div>
+          )}
         </div>
 
         <FolderBrowser

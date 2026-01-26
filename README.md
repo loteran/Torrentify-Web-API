@@ -162,6 +162,19 @@ docker pull loteran/torrentify-web-api:latest
 
 ## Reverse Proxy (HTTPS)
 
+### Generateur integre (recommande)
+
+Torrentify inclut un generateur de configuration nginx accessible depuis les **Parametres** :
+
+1. Ouvrez les **Parametres** (icone engrenage)
+2. Faites defiler jusqu'a la section **Reverse Proxy (Nginx)**
+3. Entrez votre nom de domaine
+4. (Optionnel) Entrez un sous-chemin si vous voulez utiliser `/torrentify`
+5. Cliquez sur **Generer la configuration**
+6. Copiez ou telechargez la configuration generee
+
+### Configuration manuelle
+
 Pour utiliser derriere un reverse proxy nginx avec SSL :
 
 ```nginx
@@ -206,6 +219,12 @@ docker compose up -d
 ```
 
 ## Changelog
+
+### v2.2.0
+- Generateur de configuration Nginx integre
+- Generation automatique de config reverse proxy HTTPS
+- Support des sous-chemins (BASE_PATH)
+- Export et copie de la configuration
 
 ### v2.1.0
 - Authentification optionnelle (login/password)
