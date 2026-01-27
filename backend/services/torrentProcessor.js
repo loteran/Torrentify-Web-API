@@ -1,6 +1,7 @@
 const sceneMaker = require('../../scene-maker');
 const processQueue = require('./processQueue');
 const fileScanner = require('./fileScanner');
+const configManager = require('./configManager');
 
 class TorrentProcessor {
   constructor() {
@@ -81,8 +82,17 @@ class TorrentProcessor {
     };
 
     try {
-      // Process files using scene-maker
-      const summary = await sceneMaker.processFiles(filePaths, progressCallback);
+      // Get dynamic configuration
+      const mediaConfig = configManager.getMediaConfig();
+      const trackers = configManager.getTrackers();
+      const fullConfig = configManager.getFullConfig();
+
+      // Process files using scene-maker with dynamic config
+      const summary = await sceneMaker.processFiles(filePaths, progressCallback, {
+        mediaConfig,
+        trackers,
+        tmdbApiKey: fullConfig.tmdb_api_key
+      });
 
       // Update job with summary
       processQueue.setJobSummary(jobId, summary);
@@ -293,8 +303,17 @@ class TorrentProcessor {
     };
 
     try {
-      // Process directories using scene-maker
-      const summary = await sceneMaker.processDirectories(directories, progressCallback);
+      // Get dynamic configuration
+      const mediaConfig = configManager.getMediaConfig();
+      const trackers = configManager.getTrackers();
+      const fullConfig = configManager.getFullConfig();
+
+      // Process directories using scene-maker with dynamic config
+      const summary = await sceneMaker.processDirectories(directories, progressCallback, {
+        mediaConfig,
+        trackers,
+        tmdbApiKey: fullConfig.tmdb_api_key
+      });
 
       // Update job with summary
       processQueue.setJobSummary(jobId, summary);
