@@ -85,12 +85,14 @@ class TorrentProcessor {
       // Get dynamic configuration
       const mediaConfig = configManager.getMediaConfig();
       const trackers = configManager.getTrackers();
+      const hardlinkMapping = configManager.getHardlinkMapping();
       const fullConfig = configManager.getFullConfig();
 
       // Process files using scene-maker with dynamic config
       const summary = await sceneMaker.processFiles(filePaths, progressCallback, {
         mediaConfig,
         trackers,
+        hardlinkMapping,
         tmdbApiKey: fullConfig.tmdb_api_key
       });
 
@@ -306,12 +308,14 @@ class TorrentProcessor {
       // Get dynamic configuration
       const mediaConfig = configManager.getMediaConfig();
       const trackers = configManager.getTrackers();
+      const hardlinkMapping = configManager.getHardlinkMapping();
       const fullConfig = configManager.getFullConfig();
 
       // Process directories using scene-maker with dynamic config
       const summary = await sceneMaker.processDirectories(directories, progressCallback, {
         mediaConfig,
         trackers,
+        hardlinkMapping,
         tmdbApiKey: fullConfig.tmdb_api_key
       });
 

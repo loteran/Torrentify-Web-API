@@ -256,7 +256,87 @@ class ConfigManager {
     return mediaConfigs;
   }
 
-  /**
+
+  getHardlinkMapping() {
+    const config = this.getFullConfig();
+    const hardlinkDests = (config.path_hardlinks || '').split(',').map(p => p.trim()).filter(Boolean);
+    const mapping = [];
+
+    if (hardlinkDests.length === 0) {
+      return mapping;
+    }
+
+    // Get all media configs
+    const mediaConfigs = this.getMediaConfig();
+
+    // Create mapping for each source path to the appropriate hardlink destination
+    mediaConfigs.forEach(media => {
+      // Determine which hardlink destination to use based on source path
+      // Priority: use first hardlink dest that is on the same disk
+      let selectedDest = hardlinkDests[0]; // Default to first if can't determine
+
+      // Try to match by disk (simple heuristic: check if /mnt/Stockage or /mnt/Stockage2)
+      for (const dest of hardlinkDests) {
+        const sourceDisk = media.source.split('/').slice(0, 3).join('/'); // /mnt/Stockage or /mnt/Stockage2
+        const destDisk = dest.split('/').slice(0, 3).join('/');
+
+        if (sourceDisk === destDisk) {
+          selectedDest = dest;
+          break;
+        }
+      }
+
+      mapping.push({
+        source: media.source,
+        dest: selectedDest
+      });
+    });
+
+    return mapping;
+  }
+
+
+  
+  getHardlinkMapping() {
+    const config = this.getFullConfig();
+    const hardlinkDests = (config.path_hardlinks || '').split(',').map(p => p.trim()).filter(Boolean);
+    const mapping = [];
+
+    if (hardlinkDests.length === 0) {
+      return mapping;
+    }
+
+    // Get all media configs
+    const mediaConfigs = this.getMediaConfig();
+
+    // Create mapping for each source path to the appropriate hardlink destination
+    mediaConfigs.forEach(media => {
+      // Determine which hardlink destination to use based on source path
+      // Priority: use first hardlink dest that is on the same disk
+      let selectedDest = hardlinkDests[0]; // Default to first if can't determine
+
+      // Try to match by disk (simple heuristic: check if /mnt/Stockage or /mnt/Stockage2)
+      for (const dest of hardlinkDests) {
+        const sourceDisk = media.source.split('/').slice(0, 3).join('/'); // /mnt/Stockage or /mnt/Stockage2
+        const destDisk = dest.split('/').slice(0, 3).join('/');
+
+        if (sourceDisk === destDisk) {
+          selectedDest = dest;
+          break;
+        }
+      }
+
+      mapping.push({
+        source: media.source,
+        dest: selectedDest
+      });
+    });
+
+    return mapping;
+  }
+
+
+    /**
    * Get trackers as array
    */
   getTrackers() {
