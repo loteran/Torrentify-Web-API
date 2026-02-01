@@ -461,13 +461,28 @@ function generateReleaseName(info, mediaType) {
  * @returns {string|null} - Hardlink directory or null if not found
  */
 function getHardlinkDir(sourcePath) {
-  for (const mapping of HARDLINK_MAPPING) {
-    if (sourcePath.startsWith(mapping.source)) {
+  // Sort mappings by length (longest first) to match most specific path first
+  const sortedMappings = HARDLINK_MAPPING.slice().sort((a, b) => b.source.length - a.source.length);
+  
+  for (const mapping of sortedMappings) {
+    // Check if sourcePath starts with mapping.source AND
+    // the next character is '/' (path separator) or it's the exact match
+    if (sourcePath === mapping.source || 
+        sourcePath.startsWith(mapping.source + '/')) {
       return mapping.dest;
     }
   }
   return null;
 }
+
+/**
+ * Check if a path starts with a given prefix, with proper path boundary checking
+ * Prevents /mnt/Stockage/Films2 from matching /mnt/Stockage/Films
+ */
+function pathStartsWith(filePath, prefix) {
+  return filePath === prefix || filePath.startsWith(prefix + '/');
+}
+
 
 /**
  * Create hard links for files in a directory, preserving subdirectory structure
@@ -862,7 +877,7 @@ async function processFiles(filePaths, progressCallback = null, options = {}) {
       let destBase = null;
       let mediaType = null;
       for (const media of mediaConfig) {
-        if (file.startsWith(media.source)) {
+        if (pathStartsWith(file, media.source)) {
           destBase = media.dest;
           mediaType = media.type;
           break;
@@ -1127,7 +1142,7 @@ async function processDirectory(dirPath, files, progressCallback = null, customT
   let destBase = null;
   let mediaType = null;
   for (const media of mediaConfig) {
-    if (dirPath.startsWith(media.source)) {
+        if (pathStartsWith(dirPath, media.source)) {
       destBase = media.dest;
       mediaType = media.type;
       break;
