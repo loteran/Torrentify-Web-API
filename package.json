@@ -1,7 +1,7 @@
 {
   "name": "torrentify-web-api",
   "version": "3.0.0",
-  "description": "Torrentify-Web-API - Automatic torrent file generator with web interface and file browser",
+  "description": "Torrentify-Web-API - G\u00e9n\u00e9rateur automatique de fichiers .torrent avec interface web et navigateur de fichiers",
   "type": "commonjs",
   "main": "backend/server.js",
   "scripts": {
