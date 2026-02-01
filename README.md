@@ -220,6 +220,14 @@ docker compose up -d
 
 ## Changelog
 
+### v3.0.0
+- Génération de noms AATM pour les fichiers individuels (cohérent avec les répertoires)
+- Extraction de métadonnées améliorée avec guessit pour tous les fichiers
+- Permissions correctes (777) et propriété pi:pi pour tous les fichiers/répertoires créés
+- Utilisation de la fonction generateReleaseName() pour les fichiers
+- Support des hardlinks avec permissions appropriées
+- Meilleur nommage des torrents selon les standards AATM
+
 ### v2.2.0
 - Generateur de configuration Nginx integre
 - Generation automatique de config reverse proxy HTTPS
