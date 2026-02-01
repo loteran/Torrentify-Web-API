@@ -192,6 +192,85 @@ function setPermissions(filePath) {
 // ---------------------- AATM NAMING FUNCTIONS ----------------------
 
 /**
+ * Extract video/audio codecs from file using mediainfo
+ * @param {string} filePath - Path to media file
+ * @returns {object} - Object with codec, audio, audioChannels
+ */
+async function extractMediaCodecs(filePath) {
+  const result = { codec: '', audio: '', audioChannels: '' };
+
+  try {
+    // Extract video codec
+    const videoFormat = await execAsync('mediainfo', ['--Output=Video;%Format%', filePath]);
+    const videoCodec = videoFormat.trim().split('\n')[0]; // Take first video track
+    if (videoCodec) {
+      // Map mediainfo format to scene naming
+      const vc = videoCodec.toUpperCase();
+      if (vc === 'AVC' || vc === 'H.264' || vc === 'H264') {
+        result.codec = 'x264';
+      } else if (vc === 'HEVC' || vc === 'H.265' || vc === 'H265') {
+        result.codec = 'x265';
+      } else if (vc === 'VP9') {
+        result.codec = 'VP9';
+      } else if (vc === 'AV1') {
+        result.codec = 'AV1';
+      } else {
+        result.codec = videoCodec;
+      }
+    }
+
+    // Extract audio codec and channels (first audio track)
+    const audioInfo = await execAsync('mediainfo', ['--Output=Audio;%Format%|%Channels%\\n', filePath]);
+    const firstAudioTrack = audioInfo.trim().split('\n')[0];
+    if (firstAudioTrack && firstAudioTrack.includes('|')) {
+      const [audioFormat, channels] = firstAudioTrack.split('|');
+
+      // Map audio codec
+      if (audioFormat) {
+        const af = audioFormat.toUpperCase().trim();
+        if (af === 'E-AC-3' || af === 'EAC3') {
+          result.audio = 'DDP';
+        } else if (af === 'AC-3' || af === 'AC3') {
+          result.audio = 'AC3';
+        } else if (af === 'AAC' || af.startsWith('AAC')) {
+          result.audio = 'AAC';
+        } else if (af === 'DTS') {
+          result.audio = 'DTS';
+        } else if (af === 'DTS-HD' || af.includes('DTS-HD MA')) {
+          result.audio = 'DTS-HD.MA';
+        } else if (af === 'TRUEHD' || af === 'MLP FBA') {
+          result.audio = 'TrueHD';
+        } else if (af === 'FLAC') {
+          result.audio = 'FLAC';
+        } else if (af === 'OPUS') {
+          result.audio = 'OPUS';
+        } else if (af === 'VORBIS') {
+          result.audio = 'Vorbis';
+        } else if (af === 'MP3' || af === 'MPEG AUDIO') {
+          result.audio = 'MP3';
+        } else {
+          result.audio = audioFormat.trim();
+        }
+      }
+
+      // Map channels
+      if (channels) {
+        const ch = parseInt(channels.trim(), 10);
+        if (ch === 1) result.audioChannels = '1.0';
+        else if (ch === 2) result.audioChannels = '2.0';
+        else if (ch === 6) result.audioChannels = '5.1';
+        else if (ch === 8) result.audioChannels = '7.1';
+        else if (ch > 0) result.audioChannels = `${ch - 1}.1`;
+      }
+    }
+  } catch (e) {
+    // Silently fail - mediainfo might not work on all files
+  }
+
+  return result;
+}
+
+/**
  * Extract full media info using guessit
  * @param {string} filePath - Path to analyze
  * @returns {object} - Media info object
@@ -904,10 +983,28 @@ async function processFiles(filePaths, progressCallback = null, options = {}) {
           log(`🔍 Extraction des informations media avec guessit...`);
           mediaInfo = await extractFullMediaInfo(file);
 
+          // Enrich with mediainfo codecs if guessit didn't find them
+          if (mediaInfo && (!mediaInfo.codec || !mediaInfo.audio)) {
+            log(`🔍 Extraction des codecs avec mediainfo...`);
+            const codecs = await extractMediaCodecs(file);
+            if (!mediaInfo.codec && codecs.codec) {
+              mediaInfo.codec = codecs.codec;
+              log(`📼 Codec vidéo détecté: ${codecs.codec}`);
+            }
+            if (!mediaInfo.audio && codecs.audio) {
+              mediaInfo.audio = codecs.audio;
+              log(`🔊 Codec audio détecté: ${codecs.audio}`);
+            }
+            if (!mediaInfo.audioChannels && codecs.audioChannels) {
+              mediaInfo.audioChannels = codecs.audioChannels;
+              log(`🔊 Canaux audio détectés: ${codecs.audioChannels}`);
+            }
+          }
+
           if (mediaInfo && mediaInfo.title) {
             log(`📋 Titre: ${mediaInfo.title}${mediaInfo.year ? ` (${mediaInfo.year})` : ''}`);
             if (mediaInfo.season) log(`📺 Saison: ${mediaInfo.season}${mediaInfo.episode ? ` Episode: ${mediaInfo.episode}` : ''}`);
-            
+
             const aatmName = generateReleaseName(mediaInfo, mediaType);
             if (aatmName && aatmName.length > 5) {
               log(`🎬 Nom scene AATM: ${aatmName}`);
@@ -1177,6 +1274,24 @@ async function processDirectory(dirPath, files, progressCallback = null, customT
       const firstVideoFile = files.find(f => f.path && VIDEO_EXT.some(ext => f.path.toLowerCase().endsWith(`.${ext}`)));
       const guessitPath = firstVideoFile ? firstVideoFile.path : dirPath;
       mediaInfo = await extractFullMediaInfo(guessitPath);
+
+      // Enrich with mediainfo codecs if guessit didn't find them
+      if (mediaInfo && firstVideoFile && (!mediaInfo.codec || !mediaInfo.audio)) {
+        log(`🔍 Extraction des codecs avec mediainfo...`);
+        const codecs = await extractMediaCodecs(firstVideoFile.path);
+        if (!mediaInfo.codec && codecs.codec) {
+          mediaInfo.codec = codecs.codec;
+          log(`📼 Codec vidéo détecté: ${codecs.codec}`);
+        }
+        if (!mediaInfo.audio && codecs.audio) {
+          mediaInfo.audio = codecs.audio;
+          log(`🔊 Codec audio détecté: ${codecs.audio}`);
+        }
+        if (!mediaInfo.audioChannels && codecs.audioChannels) {
+          mediaInfo.audioChannels = codecs.audioChannels;
+          log(`🔊 Canaux audio détectés: ${codecs.audioChannels}`);
+        }
+      }
 
       if (mediaInfo && mediaInfo.title) {
         log(`📋 Titre: ${mediaInfo.title}${mediaInfo.year ? ` (${mediaInfo.year})` : ''}`);
