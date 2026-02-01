@@ -310,7 +310,7 @@ function App() {
 
       <footer className="app-footer">
         <p>
-          Torrentify v2.2.0 - Generateur automatique de torrents
+          Torrentify v3.0.0 - Generateur automatique de torrents
           {stats && ` • ${stats.totalFiles} fichiers • ${stats.completed} traites`}
         </p>
       </footer>
