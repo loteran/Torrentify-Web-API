@@ -353,6 +353,16 @@ function ConfigPanel({ onClose, onSave, isSetup = false }) {
             <h3>Repertoires des medias</h3>
             <small className="section-hint">Ajoutez un ou plusieurs repertoires pour chaque categorie de medias.</small>
 
+            <div className="config-info-box">
+              <strong>Important - Configuration Docker</strong>
+              <p>
+                Les chemins configures ici doivent etre montes dans votre <code>docker-compose.yml</code>.
+                Pour creer des torrents, les volumes doivent etre en <strong>lecture-ecriture</strong> (sans <code>:ro</code>).
+              </p>
+              <p>Exemple :</p>
+              <pre>volumes:{'\n'}  - /mnt:/mnt        # Lecture-ecriture{'\n'}  - /media:/media    # Lecture-ecriture</pre>
+            </div>
+
             <MultiPathInput
               label="Films"
               paths={config.path_films}

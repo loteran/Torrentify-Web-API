@@ -178,6 +178,283 @@ function formatDuration(ms) {
   return `${h}h ${m % 60}m ${s % 60}s`;
 }
 
+
+// Utility function to set permissions and ownership for files/directories
+function setPermissions(filePath) {
+  try {
+    fs.chmodSync(filePath, 0o777);
+    fs.chownSync(filePath, 1000, 1000); // pi:pi
+  } catch (err) {
+    // Silently fail if not running as root or if permissions cannot be changed
+  }
+}
+
+// ---------------------- AATM NAMING FUNCTIONS ----------------------
+
+/**
+ * Extract full media info using guessit
+ * @param {string} filePath - Path to analyze
+ * @returns {object} - Media info object
+ */
+async function extractFullMediaInfo(filePath) {
+  try {
+    const pythonPath = '/opt/venv/bin/python3';
+    const out = await execAsync(pythonPath, ['-c', `
+import json
+from guessit import guessit
+info = guessit("${filePath.replace(/"/g, '\\"')}")
+result = {
+    'title': info.get('title', ''),
+    'year': str(info.get('year', '')) if info.get('year') else '',
+    'season': 'S' + str(info.get('season', '')).zfill(2) if info.get('season') else '',
+    'episode': 'E' + str(info.get('episode', '')).zfill(2) if info.get('episode') else '',
+    'resolution': info.get('screen_size', ''),
+    'source': info.get('source', ''),
+    'codec': info.get('video_codec', ''),
+    'audio': info.get('audio_codec', ''),
+    'audioChannels': info.get('audio_channels', ''),
+    'language': 'MULTI' if isinstance(info.get('language'), list) and len(info.get('language', [])) > 1 else (str(info.get('language', '')).upper() if info.get('language') else ''),
+    'releaseGroup': info.get('release_group', ''),
+    'hdr': [],
+    'edition': info.get('edition', ''),
+    'imax': 'imax' in str(info).lower()
+}
+
+# Fix: If release_group looks like a resolution (1080p, 720p, 2160p, etc.), swap them
+rg = result['releaseGroup']
+if rg and isinstance(rg, str) and rg.lower().replace('p', '').replace('i', '').isdigit():
+    # This is likely a resolution, not a release group
+    if not result['resolution']:
+        result['resolution'] = rg
+    result['releaseGroup'] = ''
+# Handle HDR formats
+other = info.get('other', [])
+if not isinstance(other, list):
+    other = [other] if other else []
+for o in other:
+    o_lower = str(o).lower()
+    if 'hdr10+' in o_lower or 'hdr10plus' in o_lower:
+        result['hdr'].append('HDR10+')
+    elif 'hdr10' in o_lower:
+        result['hdr'].append('HDR10')
+    elif 'hdr' in o_lower:
+        result['hdr'].append('HDR')
+    elif 'dolby vision' in o_lower or o_lower == 'dv':
+        result['hdr'].append('DV')
+print(json.dumps(result))
+    `]);
+    return JSON.parse(out.trim());
+  } catch (e) {
+    console.error('extractFullMediaInfo error:', e.message);
+    return { title: path.parse(filePath).name, year: '' };
+  }
+}
+
+/**
+ * Normalize title according to scene naming rules
+ * @param {string} title - Original title
+ * @returns {string} - Normalized title
+ */
+function normalizeTitle(title) {
+  if (!title) return '';
+  // Remove accents
+  let normalized = title.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  // Replace cedillas
+  normalized = normalized.replace(/[çÇ]/g, m => m === 'ç' ? 'c' : 'C');
+  // Replace apostrophes with dots
+  normalized = normalized.replace(/[''`]/g, '.');
+  // Remove forbidden special characters
+  normalized = normalized.replace(/[,;}{[\]:]/g, '');
+  // Replace hyphens with dots
+  normalized = normalized.replace(/-/g, '.');
+  // Capitalize first letter of each word
+  normalized = normalized.split(/\s+/).map(word => {
+    if (word.length === 0) return '';
+    if (word === word.toUpperCase() && word.length <= 4) return word;
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  }).join('.');
+  // Clean multiple dots
+  normalized = normalized.replace(/\.{2,}/g, '.').replace(/^\.|\.$/g, '');
+  return normalized;
+}
+
+/**
+ * Generate movie release name according to AATM/La Cale rules
+ * @param {object} info - Media info object
+ * @returns {string} - Release name
+ */
+function generateMovieReleaseName(info) {
+  const parts = [];
+
+  // 1. Title (normalized)
+  if (info.title) parts.push(normalizeTitle(info.title));
+
+  // 2. Year
+  if (info.year) parts.push(info.year);
+
+  // 3. Info (REPACK, PROPER, etc.)
+  if (info.info) parts.push(info.info.toUpperCase());
+
+  // 4. Edition
+  if (info.edition) parts.push(info.edition);
+
+  // 5. IMAX
+  if (info.imax) parts.push('iMAX');
+
+  // 6. Language
+  if (info.language) {
+    const lang = info.language.toUpperCase();
+    parts.push(lang === 'MULTI' ? 'MULTi' : lang);
+  }
+
+  // 7. LanguageInfo (VFF, VFQ, etc.)
+  if (info.languageInfo) parts.push(info.languageInfo.toUpperCase());
+
+  // 8. HDR/DV
+  if (info.hdr && info.hdr.length > 0) {
+    const hdrOrder = ['HDR10+', 'HDR10', 'HDR', 'DV', 'HLG', 'SDR'];
+    const sortedHdr = info.hdr
+      .map(h => h.toUpperCase().replace('DOLBY VISION', 'DV'))
+      .sort((a, b) => hdrOrder.indexOf(a) - hdrOrder.indexOf(b));
+    parts.push(...sortedHdr);
+  }
+
+  // 9. Resolution
+  if (info.resolution) {
+    const res = info.resolution.toLowerCase();
+    parts.push(res.endsWith('p') ? res : res + 'p');
+  }
+
+  // 10. Platform
+  if (info.platform) parts.push(info.platform.toUpperCase());
+
+  // 11. Source (normalized)
+  if (info.source) {
+    let source = info.source;
+    const s = source.toLowerCase();
+    if (s === 'web-dl' || s === 'webdl' || s === 'web') source = 'WEB-DL';
+    else if (s === 'webrip') source = 'WEBRip';
+    else if (s === 'bluray' || s === 'blu-ray' || s === 'bdrip' || s === 'brrip') source = 'BluRay';
+    else if (s === 'remux') source = 'REMUX';
+    else if (s === 'hdlight') source = 'HDLight';
+    else if (s === '4klight') source = '4KLight';
+    else if (s === 'dvdrip') source = 'DVDRip';
+    else if (s === 'hdtv') source = 'HDTV';
+    parts.push(source);
+  }
+
+  // 12. Audio (normalized)
+  if (info.audio) {
+    let audio = info.audio.toUpperCase();
+    if (audio === 'DDP' || audio === 'E-AC-3' || audio === 'EAC3') audio = 'DDP';
+    if (audio === 'DD' || audio === 'AC-3') audio = 'AC3';
+    parts.push(audio);
+  }
+
+  // 13. Audio channels
+  if (info.audioChannels) parts.push(info.audioChannels);
+
+  // 14. AudioSpec (Atmos)
+  if (info.audioSpec) parts.push(info.audioSpec);
+
+  // 15. Video codec (normalized)
+  if (info.codec) {
+    let codec = info.codec.toUpperCase();
+    if (codec === 'H264' || codec === 'H.264' || codec === 'AVC') codec = 'x264';
+    if (codec === 'H265' || codec === 'H.265' || codec === 'HEVC') codec = 'x265';
+    parts.push(codec);
+  }
+
+  // Build name
+  const baseName = parts.join('.');
+  const team = info.releaseGroup || 'NoTag';
+  return `${baseName}-${team}`;
+}
+
+/**
+ * Generate series release name according to AATM/La Cale rules
+ * @param {object} info - Media info object
+ * @param {string} mediaType - 'season' or 'episode'
+ * @returns {string} - Release name
+ */
+function generateSeriesReleaseName(info, mediaType) {
+  const parts = [];
+
+  // 1. Title
+  if (info.title) parts.push(normalizeTitle(info.title));
+
+  // 2. Year (optional for series)
+  if (info.year) parts.push(info.year);
+
+  // 3. Season/Episode
+  if (mediaType === 'season') {
+    if (info.season) {
+      if (info.season.toUpperCase() === 'COMPLETE' || info.season.toUpperCase() === 'INTEGRALE') {
+        parts.push('COMPLETE');
+      } else {
+        parts.push(info.season.toUpperCase());
+      }
+    }
+  } else {
+    if (info.season && info.episode) {
+      parts.push(`${info.season.toUpperCase()}${info.episode.toUpperCase()}`);
+    } else if (info.episode) {
+      parts.push(info.episode.toUpperCase());
+    } else if (info.season) {
+      parts.push(info.season.toUpperCase());
+    }
+  }
+
+  // 4-15. Same tags as movies
+  if (info.info) parts.push(info.info.toUpperCase());
+  if (info.edition) parts.push(info.edition);
+  if (info.imax) parts.push('iMAX');
+  if (info.language) parts.push(info.language === 'MULTI' ? 'MULTi' : info.language.toUpperCase());
+  if (info.languageInfo) parts.push(info.languageInfo.toUpperCase());
+  if (info.hdr && info.hdr.length > 0) parts.push(...info.hdr.map(h => h.toUpperCase()));
+  if (info.resolution) parts.push(info.resolution.toLowerCase().endsWith('p') ? info.resolution.toLowerCase() : info.resolution.toLowerCase() + 'p');
+  if (info.platform) parts.push(info.platform.toUpperCase());
+  if (info.source) {
+    let source = info.source.toLowerCase();
+    if (source === 'bluray' || source === 'bdrip') source = 'BluRay';
+    else if (source === 'web-dl' || source === 'webdl' || source === 'web') source = 'WEB-DL';
+    else if (source === 'webrip') source = 'WEBRip';
+    else source = info.source;
+    parts.push(source);
+  }
+  if (info.audio) parts.push(info.audio.toUpperCase());
+  if (info.audioChannels) parts.push(info.audioChannels);
+  if (info.audioSpec) parts.push(info.audioSpec);
+  if (info.codec) {
+    let codec = info.codec.toUpperCase();
+    if (codec === 'HEVC' || codec === 'H265') codec = 'x265';
+    if (codec === 'AVC' || codec === 'H264') codec = 'x264';
+    parts.push(codec);
+  }
+
+  const baseName = parts.join('.');
+  const team = info.releaseGroup || 'NoTag';
+  return `${baseName}-${team}`;
+}
+
+/**
+ * Generate release name based on media type
+ * @param {object} info - Media info object
+ * @param {string} mediaType - 'movie', 'tv', 'season', or 'episode'
+ * @returns {string} - Release name
+ */
+function generateReleaseName(info, mediaType) {
+  if (mediaType === 'movie') {
+    return generateMovieReleaseName(info);
+  } else if (mediaType === 'tv' || mediaType === 'season' || mediaType === 'episode') {
+    // Determine if it's a full season or single episode
+    const seriesType = info.episode ? 'episode' : 'season';
+    return generateSeriesReleaseName(info, seriesType);
+  }
+  // For ebook/game, keep original name
+  return info.title || '';
+}
+
 /**
  * Find the hardlink directory for a given source path
  * @param {string} sourcePath - Source file path
@@ -230,6 +507,7 @@ function createHardLinks(torrentName, files, log = console.log, sourceBaseDir = 
     // Create the hardlink folder
     if (!fs.existsSync(hardlinkFolder)) {
       fs.mkdirSync(hardlinkFolder, { recursive: true });
+      setPermissions(hardlinkFolder);
       log(`📁 Dossier hardlinks créé: ${hardlinkFolder}`);
     }
 
@@ -247,6 +525,7 @@ function createHardLinks(torrentName, files, log = console.log, sourceBaseDir = 
         // Create subdirectory structure if needed
         if (!fs.existsSync(destDir)) {
           fs.mkdirSync(destDir, { recursive: true });
+          setPermissions(destDir);
         }
 
         if (fs.existsSync(destPath)) {
@@ -263,6 +542,7 @@ function createHardLinks(torrentName, files, log = console.log, sourceBaseDir = 
 
         // Create hard link
         fs.linkSync(sourcePath, destPath);
+        setPermissions(destPath);
         created++;
       } catch (linkError) {
         log(`⚠️ Impossible de créer le hardlink pour ${relativePath}: ${linkError.message}`, 'warn');
@@ -340,7 +620,11 @@ async function getCachedMovie(title, year, language, apiKey = null) {
   }
 
   const movie = await searchTMDb(title, year, language, apiKey);
-  if (movie) fs.writeFileSync(file, JSON.stringify(movie, null, 2));
+  if (movie) {
+    fs.writeFileSync(file, JSON.stringify(movie, null, 2));
+    setPermissions(file);
+  }
+  setPermissions(file);
   return movie;
 }
 
@@ -372,6 +656,7 @@ async function processFile(file, index, total, destBase) {
   console.log(`📊 Traitement ${index}/${total} → ${path.basename(file)}`);
 
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  setPermissions(outDir);
 
   if (!fileExistsAndNotEmpty(nfo)) {
     let mediadata = await execAsync('mediainfo', [file]);
@@ -425,9 +710,11 @@ Generated by torrentify
     if (movie?.id) {
       tmdbFound++;
       fs.writeFileSync(txt, `ID TMDB : ${movie.id}\n`);
+      setPermissions(txt);
     } else {
       tmdbMissing++;
       fs.writeFileSync(txt, `TMDb non trouvé\n`);
+      setPermissions(txt);
       console.log(`⚠️ TMDb non trouvé : ${guess.title}`);
     }
   }
@@ -573,9 +860,11 @@ async function processFiles(filePaths, progressCallback = null, options = {}) {
 
       // Find the correct destination base for this file
       let destBase = null;
+      let mediaType = null;
       for (const media of mediaConfig) {
         if (file.startsWith(media.source)) {
           destBase = media.dest;
+          mediaType = media.type;
           break;
         }
       }
@@ -586,8 +875,33 @@ async function processFiles(filePaths, progressCallback = null, options = {}) {
         continue;
       }
 
-      const nameNoExt = path.parse(file).name;
-      const safeFolder = safeName(nameNoExt);
+      // Generate scene name using AATM logic (for movie/tv types)
+      let fileName = path.parse(file).name;
+      let torrentName = fileName;
+      let mediaInfo = null;
+
+      if (mediaType !== 'game') {
+        try {
+          log(`🔍 Extraction des informations media avec guessit...`);
+          mediaInfo = await extractFullMediaInfo(file);
+
+          if (mediaInfo && mediaInfo.title) {
+            log(`📋 Titre: ${mediaInfo.title}${mediaInfo.year ? ` (${mediaInfo.year})` : ''}`);
+            if (mediaInfo.season) log(`📺 Saison: ${mediaInfo.season}${mediaInfo.episode ? ` Episode: ${mediaInfo.episode}` : ''}`);
+            
+            const aatmName = generateReleaseName(mediaInfo, mediaType);
+            if (aatmName && aatmName.length > 5) {
+              log(`🎬 Nom scene AATM: ${aatmName}`);
+              torrentName = aatmName;
+            }
+          }
+        } catch (e) {
+          log(`⚠️ Impossible de generer le nom AATM: ${e.message}`, 'warn');
+          torrentName = fileName; // fallback to filename without extension
+        }
+      }
+
+      const safeFolder = safeName(torrentName);
       const outDir = path.join(destBase, safeFolder);
 
       const nfo = path.join(outDir, `${safeFolder}.nfo`);
@@ -605,6 +919,7 @@ async function processFiles(filePaths, progressCallback = null, options = {}) {
       updateProgress(index, filePaths.length, path.basename(file));
 
       if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  setPermissions(outDir);
 
       if (!fileExistsAndNotEmpty(nfo)) {
         let mediadata = await execAsync('mediainfo', [file]);
@@ -615,7 +930,7 @@ async function processFiles(filePaths, progressCallback = null, options = {}) {
 
         fs.writeFileSync(nfo, `
 ============================================================
-Release Name : ${nameNoExt}
+Release Name : ${torrentName}
 Added On    : ${new Date().toISOString().replace('T',' ').split('.')[0]}
 ============================================================
 
@@ -625,6 +940,7 @@ ${mediadata}
 Generated by torrentify
 ============================================================
 `.trim());
+      setPermissions(nfo);
       }
 
       if (!fileExistsAndNotEmpty(torrent)) {
@@ -658,10 +974,12 @@ Generated by torrentify
         if (movie?.id) {
           localTmdbFound.push(file);
           fs.writeFileSync(txt, `ID TMDB : ${movie.id}\n`);
+          setPermissions(txt);
           log(`🎬 TMDb trouvé : ${guess.title}`);
         } else {
           localTmdbMissing.push(file);
           fs.writeFileSync(txt, `TMDb non trouvé\n`);
+          setPermissions(txt);
           log(`⚠️ TMDb non trouvé : ${guess.title}`, 'warn');
         }
       }
@@ -794,14 +1112,11 @@ async function processDirectory(dirPath, files, progressCallback = null, customT
   const tmdbKeyToUse = customTmdbApiKey || TMDB_API_KEY;
 
   const dirName = path.basename(dirPath);
-  // Use custom torrent name if provided, otherwise use directory name
-  const torrentName = customTorrentName || dirName;
-  const safeFolder = safeName(torrentName);
 
   // Use custom config if provided, otherwise fall back to MEDIA_CONFIG
   const mediaConfig = customMediaConfig && customMediaConfig.length > 0 ? customMediaConfig : MEDIA_CONFIG;
 
-  // Find the correct destination base for this directory
+  // Find the correct destination base for this directory first (needed for AATM naming)
   let destBase = null;
   let mediaType = null;
   for (const media of mediaConfig) {
@@ -816,17 +1131,47 @@ async function processDirectory(dirPath, files, progressCallback = null, customT
     throw new Error(`Cannot determine media type for directory: ${dirPath}`);
   }
 
-  const outDir = path.join(destBase, safeFolder);
-  const nfo = path.join(outDir, `${safeFolder}.nfo`);
-  const torrent = path.join(outDir, `${safeFolder}.torrent`);
-  const txt = path.join(outDir, `${safeFolder}.txt`);
-
+  // Helper log function (defined early for use in AATM naming)
   const log = (message, level = 'info') => {
     console.log(message);
     if (progressCallback) {
       progressCallback({ type: 'log', message, level, timestamp: new Date().toISOString() });
     }
   };
+
+  // Generate scene name using AATM logic (unless custom name provided or game type)
+  let torrentName = customTorrentName || dirName;
+  let mediaInfo = null;
+
+  if (!customTorrentName && mediaType !== 'game') {
+    try {
+      log(`🔍 Extraction des informations media avec guessit...`);
+      // Use the first video file for guessit, not the directory path
+      const firstVideoFile = files.find(f => f.path && VIDEO_EXT.some(ext => f.path.toLowerCase().endsWith(`.${ext}`)));
+      const guessitPath = firstVideoFile ? firstVideoFile.path : dirPath;
+      mediaInfo = await extractFullMediaInfo(guessitPath);
+
+      if (mediaInfo && mediaInfo.title) {
+        log(`📋 Titre: ${mediaInfo.title}${mediaInfo.year ? ` (${mediaInfo.year})` : ''}`);
+        if (mediaInfo.season) log(`📺 Saison: ${mediaInfo.season}${mediaInfo.episode ? ` Episode: ${mediaInfo.episode}` : ''}`);
+
+        const aatmName = generateReleaseName(mediaInfo, mediaType);
+        if (aatmName && aatmName.length > 5) {
+          log(`🎬 Nom scene AATM: ${aatmName}`);
+          torrentName = aatmName;
+        }
+      }
+    } catch (e) {
+      log(`⚠️ Impossible de generer le nom AATM: ${e.message}`, 'warn');
+    }
+  }
+
+  const safeFolder = safeName(torrentName);
+
+  const outDir = path.join(destBase, safeFolder);
+  const nfo = path.join(outDir, `${safeFolder}.nfo`);
+  const torrent = path.join(outDir, `${safeFolder}.torrent`);
+  const txt = path.join(outDir, `${safeFolder}.txt`);
 
   const startTime = Date.now();
 
@@ -837,6 +1182,7 @@ async function processDirectory(dirPath, files, progressCallback = null, customT
   }
 
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  setPermissions(outDir);
 
   // For games, scan ALL files in the directory (not just game extensions)
   let allFiles;
@@ -910,6 +1256,7 @@ Generated by torrentify
 `.trim();
 
     fs.writeFileSync(nfo, nfoContent);
+    setPermissions(nfo);
     log(`✅ NFO synthétique créé`);
   }
 
@@ -944,6 +1291,7 @@ Generated by torrentify
     if (mediaType === 'game') {
       // Pour les jeux, pas de recherche TMDB
       fs.writeFileSync(txt, `Type: Jeu\nNom: ${torrentName}\n`);
+      setPermissions(txt);
       log(`🎮 Jeu détecté - pas de recherche TMDB`);
     } else {
       // Try to guess series name from directory
@@ -988,9 +1336,11 @@ Generated by torrentify
 
       if (found?.id) {
         fs.writeFileSync(txt, `ID TMDB (TV): ${found.id}\nNom: ${found.name || guess.title}\n`);
+        setPermissions(txt);
         log(`🎬 TMDb trouvé : ${found.name || guess.title}`);
       } else {
         fs.writeFileSync(txt, `TMDb non trouvé\nRecherche: ${guess.title}\n`);
+        setPermissions(txt);
         log(`⚠️ TMDb non trouvé : ${guess.title}`, 'warn');
       }
     }

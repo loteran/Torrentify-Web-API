@@ -1,9 +1,14 @@
 services:
   torrentify-web-api:
-    build: .
+    build:
+      context: .
+      args:
+        - VITE_BASE_PATH=/torrentify-api
     image: torrentify-web-api:latest
     container_name: torrentify-web-api
     restart: unless-stopped
+    environment:
+      - BASE_PATH=/torrentify-api
 
     # Port web interface
     ports:
@@ -16,9 +21,9 @@ services:
       # Configuration persistante
       - ./config:/data/config
 
-      # Acces aux montages host pour navigation fichiers
-      - /mnt:/mnt:ro
-      - /media:/media:ro
+      # Acces aux montages host pour navigation fichiers et création torrents
+      - /mnt:/mnt
+      - /media:/media
 
       # Entrees - Adaptez selon vos chemins
       # - /chemin/vers/films:/data/films
@@ -34,6 +39,12 @@ services:
       # Cache TMDb
       # - /chemin/vers/cache:/data/cache_tmdb
 
+    networks:
+      - default
+      - gateway-network
+
 networks:
   default:
     name: torrentify-network
+  gateway-network:
+    external: true

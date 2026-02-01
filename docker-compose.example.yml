@@ -41,17 +41,16 @@ services:
       # Configuration persistante
       - ./config:/data/config
 
-      # Acces aux montages host pour navigation fichiers
-      - /mnt:/mnt:ro
-      - /media:/media:ro
+      # Acces aux montages host pour navigation fichiers ET creation torrents
+      # IMPORTANT: Ne pas utiliser :ro si vous voulez creer des torrents dans ces chemins
+      - /mnt:/mnt
+      - /media:/media
 
-      # Entrees - Adaptez selon vos chemins
-      # - /chemin/vers/films:/data/films
-      # - /chemin/vers/series:/data/series
-      # - /chemin/vers/jeux:/data/jeux
-
-      # Sorties
-      # - /chemin/vers/torrents:/data/torrent
+      # Alternative: montages specifiques (plus securise)
+      # - /chemin/vers/films:/data/films:ro        # Lecture seule pour les sources
+      # - /chemin/vers/series:/data/series:ro      # Lecture seule pour les sources
+      # - /chemin/vers/jeux:/data/jeux:ro          # Lecture seule pour les sources
+      # - /chemin/vers/torrents:/data/torrent      # Lecture-ecriture pour la sortie
 
       # Hardlinks pour Transmission (meme filesystem requis)
       # - /chemin/vers/downloads:/data/hardlinks

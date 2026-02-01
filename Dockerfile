@@ -4,6 +4,9 @@
 FROM node:20-alpine AS frontend-builder
 WORKDIR /build
 
+# Base path for frontend (default: / for direct access)
+ARG VITE_BASE_PATH=/
+
 # Install build dependencies for native modules
 RUN apk add --no-cache python3 make g++
 
@@ -13,8 +16,9 @@ COPY frontend/package*.json ./
 # Use npm install instead of npm ci for better multi-arch compatibility
 RUN npm install --legacy-peer-deps
 
-# Copy frontend source and build
+# Copy frontend source and build with base path
 COPY frontend/ ./
+ENV VITE_BASE_PATH=${VITE_BASE_PATH}
 RUN npm run build
 
 # ========================================
